@@ -1,6 +1,6 @@
 {
-  "name": "Treino do Dia",
-  "short_name": "Treino",
+  "name": "GC Performance",
+  "short_name": "GC Performance",
   "description": "Treino de casa à volta do futebol: planeamento semanal, treino do dia e registo.",
   "lang": "pt-PT",
   "start_url": "./",
