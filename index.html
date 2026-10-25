@@ -133,6 +133,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .prog b{color:var(--accent);font-weight:600}
 .sets{display:flex;flex-wrap:wrap;gap:8px;padding-left:calc(1.4em + 12px)}
 .sets label{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.sets input::placeholder{color:var(--faint);opacity:.55}
+.sets .u{font-size:.66rem;color:var(--faint);text-transform:none;letter-spacing:0;font-weight:500}
+.vt{border:1px dashed var(--line);background:transparent;color:var(--muted);font:600 .9rem var(--body);padding:10px 14px;border-radius:10px;cursor:pointer}
+.vt[aria-pressed="true"]{border:1px solid var(--good);background:var(--good);color:#fff}
 .sets input{width:56px;padding:8px 4px;text-align:center;font:600 1rem var(--body);font-variant-numeric:tabular-nums;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg)}
 .rpe{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-left:calc(1.4em + 12px)}
 .rpe .chip{padding:5px 10px;font-size:.82rem}
@@ -478,10 +482,12 @@ function suggest(id){
   const e=EX[id];
   if(e.light)return {level:0,text:e.unit==="s"?"Tensão suave, nunca dor. Respira devagar.":"Movimento lento e controlado, amplitude a crescer."};
   const last=lastFor(id);
+  if(!last&&e.unit==="volta")return {level:0,text:"Toca em cada volta quando a acabares."};
   if(!last)return {level:0,text:e.prog?"Primeira vez: começa no nível normal e regista.":"Primeira vez: regista para ter referência."};
   const reps=(last.sets||[]).map(Number).filter(n=>!isNaN(n)&&n>0);
   const lvl=last.level||0;
   if(e.max||e.unit==="máx"){const tot=reps.reduce((a,b)=>a+b,0);return {level:0,text:`Última vez: ${reps.join(" · ")||"—"} (total ${tot}). Tenta <b>${tot+2}</b> no total.`};}
+  if(e.unit==="volta"){const n=reps.length;return {level:0,text:`Última vez: ${n} de ${e.sets} voltas. Toca em cada volta quando a acabares.`};}
   if(!e.prog){const best=Math.max(0,...reps);return {level:0,text:`Última vez: ${reps.join(" · ")||"—"} ${e.unit}. Tenta igualar ou bater <b>${best}</b>.`};}
   const allTop=reps.length>0&&reps.every(r=>r>=e.hi);
   if((last.rpe==="facil"||allTop)&&last.rpe!=="duro"&&lvl<LEVELS.length-1){
@@ -562,7 +568,10 @@ function renderPlan(){
     const head=`<div class="exhead"><span class="n">${String(i+1).padStart(2,"0")}</span><div class="t"><h3>${e.n}</h3><div class="meta">${e.load}${e.side?" · por lado":""}${e.cue?" · "+e.cue:""}</div></div><span class="target">${tgtOf(e)}</span></div>`;
     if(e.light)return `<article class="ex lite">${head}</article>`;
     const dr=draft[e.id]||(draft[e.id]={sets:[],rpe:"",level:e.sugg.level});dr.level=e.sugg.level;
-    const setsIn=Array.from({length:e.sets},(_,s)=>`<label>${e.sets>1?"S"+(s+1):"Feito"}<input inputmode="numeric" id="ex-${e.id}-s${s}" data-ex="${e.id}" data-s="${s}" value="${dr.sets[s]??""}" placeholder="${e.unit==="máx"?"–":e.unit==="volta"?"✓":e.hi}"></label>`).join("");
+    const unitLab=e.unit==="máx"||e.unit==="reps"?"reps":e.unit==="s"?"seg":e.unit==="min"?"min":"";
+    const setsIn=e.unit==="volta"
+      ? Array.from({length:e.sets},(_,s)=>{const on=String(dr.sets[s]??"")==="1";return `<button type="button" class="vt" data-vt="${e.id}" data-s="${s}" aria-pressed="${on}">${on?"✓ ":""}Volta ${s+1}</button>`}).join("")
+      : Array.from({length:e.sets},(_,s)=>`<label>${e.sets>1?"Série "+(s+1):"Feito"}<input inputmode="numeric" id="ex-${e.id}-s${s}" data-ex="${e.id}" data-s="${s}" value="${dr.sets[s]??""}" placeholder="${e.unit==="máx"?"":e.hi}"><span class="u">${unitLab}</span></label>`).join("");
     const lvl=e.prog?`<div class="prog sub">Nível <b>${LEVELS[e.sugg.level]}</b> · ${LEVEL_TIP[e.sugg.level]}</div>`:"";
     return `<article class="ex">${head}${lvl}<div class="prog sub">${e.sugg.text}</div><div class="sets">${setsIn}</div>
       <div class="rpe"><span class="label">Como foi?</span>${[["facil","Fácil"],["ok","No ponto"],["duro","Duro"]].map(([v,l])=>`<button type="button" class="chip" data-rpe="${e.id}" data-v="${v}" aria-pressed="${dr.rpe===v}">${l}</button>`).join("")}</div></article>`;
@@ -585,7 +594,7 @@ function renderHist(){
   if(!sessions.length){el.innerHTML=`<div class="card empty"><h3>Ainda sem treinos guardados</h3><p>Preenche as séries no separador Hoje e carrega em Guardar treino. A partir daí, cada exercício sugere a próxima progressão.</p></div>`;return}
   el.innerHTML=sessions.map(s=>`<div class="card hitem"><div class="row"><h3>${fmtDate(s.date)} · ${s.title}</h3><span class="tag">${s.md||""}</span></div>
     <div class="meta">Pernas ${s.checkin?.legs ?? "—"}/10 · energia ${s.checkin?.energy ?? "—"}/10 · ${s.checkin?.time ?? "—"} min</div>
-    <ul>${(s.exercises||[]).map(e=>`<li><b>${EX[e.id]?.n||e.id}</b>: ${(e.sets||[]).filter(x=>x!==""&&x!=null).join(" · ")||"—"}${EX[e.id]?.prog?` · ${LEVELS[e.level||0]}`:""}${e.rpe?` · ${{facil:"fácil",ok:"no ponto",duro:"duro"}[e.rpe]}`:""}</li>`).join("")}</ul>
+    <ul>${(s.exercises||[]).map(e=>`<li><b>${EX[e.id]?.n||e.id}</b>: ${EX[e.id]?.unit==="volta"?`${(e.sets||[]).filter(x=>x!==""&&x!=null).length} voltas`:(e.sets||[]).filter(x=>x!==""&&x!=null).join(" · ")||"—"}${EX[e.id]?.prog?` · ${LEVELS[e.level||0]}`:""}${e.rpe?` · ${{facil:"fácil",ok:"no ponto",duro:"duro"}[e.rpe]}`:""}</li>`).join("")}</ul>
     <div><button class="del" type="button" data-del="${s.id}">Apagar</button></div></div>`).join("");
 }
 
@@ -694,6 +703,7 @@ document.addEventListener("click",async ev=>{
   if(b.id==="edit-week"){editing=true;form={game:wk.game,ball:wk.ball.slice(),gym:wk.gym.slice()};renderAll();return}
   if(b.id==="cancel-edit"){editing=false;renderAll();return}
   if(b.dataset.k){const k=b.dataset.k;let v=b.dataset.v;if(k==="day"||k==="time")v=Number(v);st[k]=v;saveCheckin();draft={};renderAll();return}
+  if(b.dataset.vt){const dr=draft[b.dataset.vt];const i=Number(b.dataset.s);const on=String(dr.sets[i]??"")==="1";dr.sets[i]=on?"":"1";b.setAttribute("aria-pressed",String(!on));b.textContent=(!on?"✓ ":"")+"Volta "+(i+1);return}
   if(b.dataset.rpe){const dr=draft[b.dataset.rpe];dr.rpe=dr.rpe===b.dataset.v?"":b.dataset.v;b.parentElement.querySelectorAll("[data-rpe]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.v===dr.rpe)));return}
   if(b.id&&b.id.startsWith("tab-")){const v=b.id.slice(4);for(const t of ["hoje","nutri","hist"]){$("tab-"+t).setAttribute("aria-selected",String(t===v));if(t==="hoje")$("view-hoje").style.display=v==="hoje"?"flex":"none";else $("view-"+t).hidden=t!==v}if(v==="hoje")renderAll();if(v==="nutri")renderNutri();return}
   if(b.dataset.nday){nutriDay=Number(b.dataset.nday);renderNutri();return}
