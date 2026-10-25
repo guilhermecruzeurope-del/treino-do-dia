@@ -144,6 +144,34 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .btn[disabled]{opacity:.5;cursor:default}
 .status{font-size:.92rem;color:var(--muted);text-align:center;min-height:1.3em;margin:0}
 
+/* nutrition */
+#nutri{display:flex;flex-direction:column;gap:14px}
+.nsum{display:flex;flex-direction:column;gap:14px}
+.kcal{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.kcal .num{font:700 2.6rem var(--display);line-height:.9;font-variant-numeric:tabular-nums}
+.bars{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:420px){.bars{grid-template-columns:1fr}}
+.bar{display:flex;flex-direction:column;gap:5px}
+.bar .row{display:flex;justify-content:space-between;align-items:baseline;font-size:.82rem}
+.bar .row b{font-variant-numeric:tabular-nums;font-weight:600}
+.track{height:8px;border-radius:99px;background:var(--sunk);overflow:hidden}
+.track i{display:block;height:100%;border-radius:99px;background:var(--accent);transition:width .3s}
+.track.c i{background:var(--warn)}.track.g i{background:var(--good)}
+.meal{display:flex;flex-direction:column;gap:10px}
+.meal.done{opacity:.62}
+.mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.mhead .time{font:700 1.15rem var(--display);color:var(--accent);font-variant-numeric:tabular-nums;min-width:3.4em}
+.mhead .t{flex:1;min-width:0}
+.mhead .t .meta{font-variant-numeric:tabular-nums}
+.foods{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;padding-left:calc(3.4em + 10px)}
+.foods li{display:flex;justify-content:space-between;gap:10px;font-size:.93rem;border-bottom:1px dashed var(--line);padding-bottom:5px}
+.foods li:last-child{border-bottom:0}
+.foods li span:last-child{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.eat{border:0;background:var(--sunk);color:var(--fg);font:600 .85rem var(--body);padding:8px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.eat[aria-pressed="true"]{background:var(--good);color:#fff}
+.swaps{font-size:.9rem;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.swaps b{color:var(--fg);font-weight:600}
+
 /* history */
 .histhero{position:relative;border-radius:20px;overflow:hidden;height:200px;isolation:isolate;background:#0d1b3d;color:#fff;display:flex;align-items:flex-end;padding:18px}
 .histhero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 25%;z-index:-2}
@@ -174,6 +202,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <div class="wrap gut">
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-hoje" aria-selected="true">Hoje</button>
+    <button role="tab" id="tab-nutri" aria-selected="false">Nutrição</button>
     <button role="tab" id="tab-hist" aria-selected="false">Histórico</button>
   </div>
 
@@ -215,6 +244,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 
     <div class="plan" id="plan"></div>
     </div>
+  </section>
+
+  <section id="view-nutri" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div id="nutri"></div>
   </section>
 
   <section id="view-hist" hidden style="display:flex;flex-direction:column;gap:16px">
@@ -554,6 +587,59 @@ function renderHist(){
     <div><button class="del" type="button" data-del="${s.id}">Apagar</button></div></div>`).join("");
 }
 
+const NF={"ovo": {"n": "Ovos", "u": "ovo", "g": 60, "P": 12.5, "C": 0.7, "G": 10}, "pao": {"n": "Pão de mistura/integral", "P": 9, "C": 48, "G": 2.5}, "aveia": {"n": "Flocos de aveia", "P": 13, "C": 60, "G": 7}, "skyr": {"n": "Skyr / iogurte grego magro", "P": 10, "C": 4, "G": 0.2}, "leite": {"n": "Leite meio-gordo", "P": 3.3, "C": 4.8, "G": 1.6, "ml": true}, "banana": {"n": "Banana", "u": "banana", "g": 120, "P": 1.1, "C": 22, "G": 0.3}, "fruta": {"n": "Fruta (maçã, pera, laranja)", "u": "peça", "g": 150, "P": 0.4, "C": 12, "G": 0.2}, "frango": {"n": "Peito de frango/peru (cru)", "P": 23, "C": 0, "G": 1.5}, "peixe": {"n": "Peixe branco (pescada, bacalhau fresco)", "P": 18, "C": 0, "G": 1}, "vaca": {"n": "Carne de vaca magra (crua)", "P": 21, "C": 0, "G": 5}, "atum": {"n": "Atum ao natural", "u": "lata", "g": 80, "P": 25, "C": 0, "G": 1}, "arroz": {"n": "Arroz (cru)", "P": 7, "C": 78, "G": 0.6}, "massa": {"n": "Massa (crua)", "P": 12, "C": 71, "G": 1.5}, "batata": {"n": "Batata (crua)", "P": 2, "C": 17, "G": 0.1}, "legumes": {"n": "Legumes / salada", "P": 2, "C": 5, "G": 0.3}, "azeite": {"n": "Azeite", "u": "c. sopa", "g": 10, "P": 0, "C": 0, "G": 100}, "tremoco": {"n": "Tremoços", "P": 16, "C": 10, "G": 3}, "fiambre": {"n": "Fiambre de peru", "u": "fatia", "g": 20, "P": 18, "C": 2, "G": 2}, "queijo": {"n": "Queijo fresco magro", "P": 10, "C": 3, "G": 3}, "manteiga": {"n": "Manteiga de amendoim", "u": "c. sopa", "g": 15, "P": 25, "C": 12, "G": 50}, "sopa": {"n": "Sopa de legumes", "u": "prato", "g": 300, "P": 1.3, "C": 5, "G": 1.3}, "nozes": {"n": "Frutos secos (nozes, amêndoas)", "P": 20, "C": 10, "G": 55}, "mel": {"n": "Mel", "u": "c. sobremesa", "g": 10, "P": 0, "C": 80, "G": 0}};
+const ND={"descanso": [["Pequeno-almoço", "8h30", [["ovo", 3], ["pao", 60], ["fruta", 1]]], ["Almoço", "13h", [["frango", 160], ["arroz", 60], ["legumes", 200], ["azeite", 1]]], ["Lanche", "16h30", [["skyr", 250], ["fruta", 1], ["nozes", 15]]], ["Jantar", "20h", [["sopa", 1], ["peixe", 180], ["batata", 150], ["legumes", 150], ["azeite", 1]]], ["Ceia (opcional)", "22h30", [["queijo", 100], ["tremoco", 50]]]], "ginasio": [["Pequeno-almoço", "8h30", [["ovo", 3], ["pao", 70], ["fruta", 1]]], ["Almoço", "13h", [["frango", 160], ["arroz", 75], ["legumes", 200], ["azeite", 1]]], ["Lanche", "16h30", [["skyr", 250], ["aveia", 40], ["fruta", 1]]], ["Jantar", "20h", [["sopa", 1], ["peixe", 180], ["batata", 200], ["legumes", 150], ["azeite", 1]]], ["Ceia (opcional)", "22h30", [["queijo", 100]]]], "futebol": [["Pequeno-almoço", "8h30", [["ovo", 3], ["pao", 70], ["fruta", 1]]], ["Almoço", "13h", [["frango", 170], ["arroz", 90], ["legumes", 200], ["azeite", 1]]], ["Lanche", "16h", [["skyr", 250], ["aveia", 40], ["fruta", 1]]], ["Pré-treino", "18h30", [["pao", 60], ["fiambre", 3], ["banana", 1]]], ["Jantar pós-treino", "21h45", [["peixe", 200], ["massa", 80], ["legumes", 150], ["azeite", 1]]]], "duplo": [["Pequeno-almoço", "8h30", [["ovo", 3], ["pao", 80], ["fruta", 1]]], ["Almoço", "13h", [["frango", 170], ["arroz", 100], ["legumes", 200], ["azeite", 1]]], ["Lanche", "16h", [["skyr", 250], ["aveia", 50], ["banana", 1]]], ["Pré-treino", "18h30", [["pao", 60], ["fiambre", 3], ["mel", 1]]], ["Jantar pós-treino", "21h45", [["peixe", 200], ["massa", 90], ["legumes", 150], ["azeite", 1]]]], "md1": [["Pequeno-almoço", "8h30", [["ovo", 2], ["pao", 80], ["mel", 1], ["fruta", 1]]], ["Almoço", "13h", [["frango", 170], ["arroz", 100], ["legumes", 150], ["azeite", 1]]], ["Lanche", "16h30", [["skyr", 250], ["aveia", 50], ["banana", 1]]], ["Jantar", "20h", [["peixe", 200], ["massa", 100], ["legumes", 100], ["azeite", 1]]], ["Ceia", "22h", [["leite", 250], ["pao", 30]]]], "jogo": [["Pequeno-almoço", "9h", [["ovo", 2], ["pao", 90], ["mel", 2], ["banana", 1]]], ["Almoço pré-jogo", "12h30", [["frango", 150], ["massa", 130], ["legumes", 80], ["azeite", 1]]], ["Snack pré-jogo", "14h45", [["banana", 1], ["mel", 1]]], ["Pós-jogo", "18h", [["skyr", 250], ["aveia", 40], ["fruta", 1]]], ["Jantar", "20h30", [["peixe", 200], ["arroz", 90], ["legumes", 150], ["azeite", 1]]]], "md+1": [["Pequeno-almoço", "9h", [["ovo", 3], ["pao", 70], ["fruta", 1]]], ["Almoço", "13h", [["vaca", 160], ["arroz", 80], ["legumes", 200], ["azeite", 1]]], ["Lanche", "16h30", [["skyr", 250], ["aveia", 40], ["fruta", 1]]], ["Jantar", "20h", [["sopa", 1], ["peixe", 180], ["batata", 200], ["legumes", 150], ["azeite", 1]]], ["Ceia (opcional)", "22h30", [["queijo", 100], ["nozes", 15]]]]};
+
+const NTYPE={
+  descanso:{t:"Dia de descanso",tip:"Hidratos mais baixos, proteína igual. Bom dia para muitos legumes e água."},
+  ginasio:{t:"Dia de ginásio",tip:"Hidratos moderados. Se treinares de manhã, troca o lanche pelo pequeno-almoço depois do treino."},
+  futebol:{t:"Treino de futebol",tip:"Os hidratos concentram-se antes e depois do treino. Janta até 1 h depois de acabares."},
+  duplo:{t:"Ginásio + futebol",tip:"Dia mais puxado da semana: hidratos altos e não saltes o pré-treino."},
+  md1:{t:"Véspera de jogo",tip:"Dia de carregar hidratos. Jantar com pouca fibra e nada de comida nova."},
+  jogo:{t:"Dia de jogo",tip:"Almoço grande 3–3h30 antes do jogo (16h). 500 ml de água 2 h antes, e come logo a seguir ao jogo."},
+  "md+1":{t:"Dia pós-jogo",tip:"Recuperar: proteína alta e hidratos moderados. Muita água."}
+};
+function dayType(i){
+  const d=daysToGame(i);
+  if(d===0)return "jogo";if(d===1)return "md1";if(d===6)return "md+1";
+  const c=weekPlan()[i];const gym="ABCD".includes(c||"x");const ball=footballToday(i);
+  if(gym&&ball)return "duplo";if(ball)return "futebol";if(gym)return "ginasio";return "descanso";
+}
+function foodMac(k,q){const f=NF[k];const g=f.u?q*f.g:q;return {P:f.P*g/100,C:f.C*g/100,G:f.G*g/100}}
+function mealMac(items){const m={P:0,C:0,G:0};for(const [k,q] of items){const x=foodMac(k,q);m.P+=x.P;m.C+=x.C;m.G+=x.G}m.K=m.P*4+m.C*4+m.G*9;return m}
+function qtyOf(k,q){const f=NF[k];if(f.u){const plural=q>1&&!f.u.includes(".")?(f.u==="peça"?"peças":f.u+"s"):f.u;return `${q} ${plural}`}return `${q} ${f.ml?"ml":"g"}`}
+const TODAY_KEY=(()=>{const n=new Date();return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0")})();
+let eaten=[];try{const e=JSON.parse(localStorage.getItem("gc-eaten")||"null");if(e&&e.date===TODAY_KEY)eaten=e.done||[]}catch(e){}
+let nutriDoc=null,nutriBusy=Promise.resolve();
+function saveEaten(){const v={date:TODAY_KEY,done:eaten.slice()};try{localStorage.setItem("gc-eaten",JSON.stringify(v))}catch(e){}if(nutriDoc)nutriBusy=nutriBusy.then(()=>nutriDoc.set(v)).catch(()=>{})}
+function renderNutri(){
+  const el=$("nutri");
+  if(!planned()){el.innerHTML=`<div class="card empty"><h3>Primeiro planeia a semana</h3><p>No separador Hoje, mete o jogo e os treinos de futebol. O plano alimentar de cada dia sai daí.</p></div>`;return}
+  const type=dayType(todayIdx);const meals=ND[type];const info=NTYPE[type];
+  const tot={P:0,C:0,G:0,K:0},got={P:0,C:0,G:0,K:0};
+  const ms=meals.map(([n,t,items],i)=>{const m=mealMac(items);for(const k in tot)tot[k]+=m[k];const id=type+":"+i;const done=eaten.includes(id);if(done)for(const k in got)got[k]+=m[k];return {n,t,items,m,id,done}});
+  const bar=(lab,cls,a,b)=>`<div class="bar"><div class="row"><span>${lab}</span><b>${Math.round(a)} / ${Math.round(b)} g</b></div><div class="track ${cls}"><i style="width:${Math.min(100,b?a/b*100:0)}%"></i></div></div>`;
+  const left=Math.max(0,Math.round(tot.K-got.K));
+  el.innerHTML=`<div class="card nsum">
+      <div><span class="label">Hoje · plano alimentar</span><h2 style="margin-top:4px">${info.t}</h2></div>
+      <div class="kcal"><span class="num">${Math.round(got.K)}</span><span class="meta">de ${Math.round(tot.K/10)*10} kcal · faltam ${left}</span></div>
+      <div class="track"><i style="width:${Math.min(100,got.K/tot.K*100)}%"></i></div>
+      <div class="bars">${bar("Proteína","",got.P,tot.P)}${bar("Hidratos","c",got.C,tot.C)}${bar("Gordura","g",got.G,tot.G)}</div>
+      <ul class="notes"><li>${info.tip}</li></ul>
+    </div>
+    ${ms.map(m=>`<article class="card meal${m.done?" done":""}">
+      <div class="mhead"><span class="time">${m.t}</span><div class="t"><h3>${m.n}</h3><div class="meta">${Math.round(m.m.K)} kcal · P ${Math.round(m.m.P)} · H ${Math.round(m.m.C)} · G ${Math.round(m.m.G)}</div></div>
+        <button class="eat" type="button" data-eat="${m.id}" aria-pressed="${m.done}">${m.done?"✓ Comi":"Comi"}</button></div>
+      <ul class="foods">${m.items.map(([k,q])=>`<li><span>${NF[k].n}</span><span>${qtyOf(k,q)}</span></li>`).join("")}</ul>
+    </article>`).join("")}
+    <div class="card swaps"><h3>Trocas equivalentes</h3>
+      <div><b>Proteína:</b> 160 g de frango ≈ 200 g de peixe ≈ 1½ lata de atum ≈ 175 g de vaca magra</div>
+      <div><b>Hidratos:</b> 75 g de arroz cru ≈ 80 g de massa crua ≈ 350 g de batata ≈ 120 g de pão</div>
+      <div><b>Lanche:</b> 250 g de skyr ≈ 200 g de queijo fresco magro ≈ 3 ovos</div>
+      <div>Pesos de arroz, massa, batata e carne são em cru. Na universidade, leva o almoço numa marmita com as mesmas quantidades.</div>
+    </div>`;
+}
+
 // ---------- storage ----------
 const local={
   key:"tdd-sessions",
@@ -572,6 +658,8 @@ async function initStore(){
     if(!db||!uid)throw 0;
     const col=db.doc("data/users/"+uid+"/treinos").collection("sessoes");
     weekDoc=db.doc("data/users/"+uid+"/semana");
+    nutriDoc=db.doc("data/users/"+uid+"/nutri").collection("dias").doc(TODAY_KEY);
+    try{const n=await nutriDoc.get();if(n.exists){const v=n.data();if(v&&Array.isArray(v.done)){eaten=v.done.slice();if(!$("view-nutri").hidden)renderNutri()}}}catch(e){}
     try{const w=await weekDoc.get();
       const v=w.exists?w.data():null;
       if(v&&Array.isArray(v.ball)&&Array.isArray(v.gym)&&(v.key||"")>=(wk.key||"")){
@@ -596,12 +684,13 @@ document.addEventListener("click",async ev=>{
   const b=ev.target.closest("button");if(!b)return;
   if(b.dataset.k==="game"){form.game=b.dataset.v==="none"?"none":Number(b.dataset.v);renderSetup();return}
   if(b.dataset.m){const arr=form[b.dataset.m];const v=Number(b.dataset.v);const at=arr.indexOf(v);if(at>=0)arr.splice(at,1);else arr.push(v);renderSetup();return}
-  if(b.id==="build-week"){wk.key=WEEK_KEY;wk.game=form.game;wk.ball=form.ball.slice();wk.gym=form.gym.slice();saveWeek();editing=false;draft={};renderAll();window.scrollTo({top:0});return}
+  if(b.id==="build-week"){wk.key=WEEK_KEY;wk.game=form.game;wk.ball=form.ball.slice();wk.gym=form.gym.slice();saveWeek();editing=false;draft={};renderAll();renderNutri();window.scrollTo({top:0});return}
   if(b.id==="edit-week"){editing=true;form={game:wk.game,ball:wk.ball.slice(),gym:wk.gym.slice()};renderAll();return}
   if(b.id==="cancel-edit"){editing=false;renderAll();return}
   if(b.dataset.k){const k=b.dataset.k;let v=b.dataset.v;if(k==="day"||k==="time")v=Number(v);st[k]=v;saveCheckin();draft={};renderAll();return}
   if(b.dataset.rpe){const dr=draft[b.dataset.rpe];dr.rpe=dr.rpe===b.dataset.v?"":b.dataset.v;b.parentElement.querySelectorAll("[data-rpe]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.v===dr.rpe)));return}
-  if(b.id==="tab-hoje"||b.id==="tab-hist"){const h=b.id==="tab-hist";$("tab-hoje").setAttribute("aria-selected",String(!h));$("tab-hist").setAttribute("aria-selected",String(h));$("view-hoje").style.display=h?"none":"flex";$("view-hist").hidden=!h;if(!h)renderAll();return}
+  if(b.id&&b.id.startsWith("tab-")){const v=b.id.slice(4);for(const t of ["hoje","nutri","hist"]){$("tab-"+t).setAttribute("aria-selected",String(t===v));if(t==="hoje")$("view-hoje").style.display=v==="hoje"?"flex":"none";else $("view-"+t).hidden=t!==v}if(v==="hoje")renderAll();if(v==="nutri")renderNutri();return}
+  if(b.dataset.eat){const id=b.dataset.eat;const at=eaten.indexOf(id);if(at>=0)eaten.splice(at,1);else eaten.push(id);saveEaten();renderNutri();return}
   if(b.id==="save"){
     const p=currentPlan;if(!p||p.rest)return;
     const exercises=p.items.filter(e=>!e.light).map(e=>({id:e.id,level:draft[e.id]?.level||0,rpe:draft[e.id]?.rpe||"",sets:(draft[e.id]?.sets||[]).slice(0,e.sets).map(x=>x===""||x==null?"":Number(x))})).filter(e=>e.sets.some(x=>x!==""));
