@@ -163,6 +163,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .mhead .time{font:700 1.15rem var(--display);color:var(--accent);font-variant-numeric:tabular-nums;min-width:3.4em}
 .mhead .t{flex:1;min-width:0}
 .mhead .t .meta{font-variant-numeric:tabular-nums}
+.nday{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.nday .ses.small{width:auto;min-width:36px;padding:0 4px;border-radius:10px;font-size:.62rem}
 .foods{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;padding-left:calc(3.4em + 10px)}
 .foods li{display:flex;justify-content:space-between;gap:10px;font-size:.93rem;border-bottom:1px dashed var(--line);padding-bottom:5px}
 .foods li:last-child{border-bottom:0}
@@ -612,24 +614,28 @@ const TODAY_KEY=(()=>{const n=new Date();return n.getFullYear()+"-"+String(n.get
 let eaten=[];try{const e=JSON.parse(localStorage.getItem("gc-eaten")||"null");if(e&&e.date===TODAY_KEY)eaten=e.done||[]}catch(e){}
 let nutriDoc=null,nutriBusy=Promise.resolve();
 function saveEaten(){const v={date:TODAY_KEY,done:eaten.slice()};try{localStorage.setItem("gc-eaten",JSON.stringify(v))}catch(e){}if(nutriDoc)nutriBusy=nutriBusy.then(()=>nutriDoc.set(v)).catch(()=>{})}
+let nutriDay=todayIdx;
+const NSHORT={descanso:"Desc.",ginasio:"Gin.",futebol:"Fut.",duplo:"Gin+Fut",md1:"Véspera",jogo:"Jogo","md+1":"Pós-jogo"};
 function renderNutri(){
   const el=$("nutri");
   if(!planned()){el.innerHTML=`<div class="card empty"><h3>Primeiro planeia a semana</h3><p>No separador Hoje, mete o jogo e os treinos de futebol. O plano alimentar de cada dia sai daí.</p></div>`;return}
-  const type=dayType(todayIdx);const meals=ND[type];const info=NTYPE[type];
+  const isToday=nutriDay===todayIdx;
+  const type=dayType(nutriDay);const meals=ND[type];const info=NTYPE[type];
+  const strip=`<div class="card"><div class="weekhead"><span class="label">Plano da semana</span><span class="meta">segue o teu planeamento</span></div><div class="week">${DAYS.map((dd,i)=>{const t=dayType(i);const k=ND[t].reduce((a,[,,it])=>a+mealMac(it).K,0);return `<button type="button" class="day nday ${i===nutriDay?"today":""}${i<todayIdx?" past":""}" data-nday="${i}" aria-pressed="${i===nutriDay}"><span class="dn">${dd[1]}</span><span class="ses small">${NSHORT[t]}</span><span class="ball" style="color:var(--muted)">${Math.round(k/10)*10}</span></button>`}).join("")}</div></div>`;
   const tot={P:0,C:0,G:0,K:0},got={P:0,C:0,G:0,K:0};
-  const ms=meals.map(([n,t,items],i)=>{const m=mealMac(items);for(const k in tot)tot[k]+=m[k];const id=type+":"+i;const done=eaten.includes(id);if(done)for(const k in got)got[k]+=m[k];return {n,t,items,m,id,done}});
+  const ms=meals.map(([n,t,items],i)=>{const m=mealMac(items);for(const k in tot)tot[k]+=m[k];const id=type+":"+i;const done=isToday&&eaten.includes(id);if(done)for(const k in got)got[k]+=m[k];return {n,t,items,m,id,done}});
   const bar=(lab,cls,a,b)=>`<div class="bar"><div class="row"><span>${lab}</span><b>${Math.round(a)} / ${Math.round(b)} g</b></div><div class="track ${cls}"><i style="width:${Math.min(100,b?a/b*100:0)}%"></i></div></div>`;
   const left=Math.max(0,Math.round(tot.K-got.K));
-  el.innerHTML=`<div class="card nsum">
-      <div><span class="label">Hoje · plano alimentar</span><h2 style="margin-top:4px">${info.t}</h2></div>
-      <div class="kcal"><span class="num">${Math.round(got.K)}</span><span class="meta">de ${Math.round(tot.K/10)*10} kcal · faltam ${left}</span></div>
+  el.innerHTML=strip+`<div class="card nsum">
+      <div><span class="label">${isToday?"Hoje":DAYS[nutriDay][1]+" · antevisão"} · plano alimentar</span><h2 style="margin-top:4px">${info.t}</h2></div>
+      ${isToday?`<div class="kcal"><span class="num">${Math.round(got.K)}</span><span class="meta">de ${Math.round(tot.K/10)*10} kcal · faltam ${left}</span></div>
       <div class="track"><i style="width:${Math.min(100,got.K/tot.K*100)}%"></i></div>
-      <div class="bars">${bar("Proteína","",got.P,tot.P)}${bar("Hidratos","c",got.C,tot.C)}${bar("Gordura","g",got.G,tot.G)}</div>
+      <div class="bars">${bar("Proteína","",got.P,tot.P)}${bar("Hidratos","c",got.C,tot.C)}${bar("Gordura","g",got.G,tot.G)}</div>`:`<div class="kcal"><span class="num">${Math.round(tot.K/10)*10}</span><span class="meta">kcal · proteína ${Math.round(tot.P)} g · hidratos ${Math.round(tot.C)} g · gordura ${Math.round(tot.G)} g</span></div>`}
       <ul class="notes"><li>${info.tip}</li></ul>
     </div>
     ${ms.map(m=>`<article class="card meal${m.done?" done":""}">
       <div class="mhead"><span class="time">${m.t}</span><div class="t"><h3>${m.n}</h3><div class="meta">${Math.round(m.m.K)} kcal · P ${Math.round(m.m.P)} · H ${Math.round(m.m.C)} · G ${Math.round(m.m.G)}</div></div>
-        <button class="eat" type="button" data-eat="${m.id}" aria-pressed="${m.done}">${m.done?"✓ Comi":"Comi"}</button></div>
+        ${isToday?`<button class="eat" type="button" data-eat="${m.id}" aria-pressed="${m.done}">${m.done?"✓ Comi":"Comi"}</button>`:""}</div>
       <ul class="foods">${m.items.map(([k,q])=>`<li><span>${NF[k].n}</span><span>${qtyOf(k,q)}</span></li>`).join("")}</ul>
     </article>`).join("")}
     <div class="card swaps"><h3>Trocas equivalentes</h3>
@@ -690,6 +696,7 @@ document.addEventListener("click",async ev=>{
   if(b.dataset.k){const k=b.dataset.k;let v=b.dataset.v;if(k==="day"||k==="time")v=Number(v);st[k]=v;saveCheckin();draft={};renderAll();return}
   if(b.dataset.rpe){const dr=draft[b.dataset.rpe];dr.rpe=dr.rpe===b.dataset.v?"":b.dataset.v;b.parentElement.querySelectorAll("[data-rpe]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.v===dr.rpe)));return}
   if(b.id&&b.id.startsWith("tab-")){const v=b.id.slice(4);for(const t of ["hoje","nutri","hist"]){$("tab-"+t).setAttribute("aria-selected",String(t===v));if(t==="hoje")$("view-hoje").style.display=v==="hoje"?"flex":"none";else $("view-"+t).hidden=t!==v}if(v==="hoje")renderAll();if(v==="nutri")renderNutri();return}
+  if(b.dataset.nday){nutriDay=Number(b.dataset.nday);renderNutri();return}
   if(b.dataset.eat){const id=b.dataset.eat;const at=eaten.indexOf(id);if(at>=0)eaten.splice(at,1);else eaten.push(id);saveEaten();renderNutri();return}
   if(b.id==="save"){
     const p=currentPlan;if(!p||p.rest)return;
