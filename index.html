@@ -198,9 +198,18 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .legend i.f{background:var(--warn)}
 .weigh{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media (max-width:420px){.weigh{grid-template-columns:1fr 1fr}}
-.weigh label{display:flex;flex-direction:column;gap:5px;font:600 .7rem var(--body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);min-width:0}
+.weigh label{display:flex;flex-direction:column;justify-content:flex-end;gap:5px;font:600 .7rem var(--body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);min-width:0}
 .weigh input{width:100%;padding:11px 10px;font:600 1.05rem var(--body);font-variant-numeric:tabular-nums;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg)}
 .weigh input::placeholder{color:var(--faint);opacity:.55}
+.params{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:520px){.params{grid-template-columns:repeat(2,1fr)}}
+.param{background:var(--sunk);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.param .pn{font-size:.72rem;color:var(--muted);font-weight:600}
+.param .pv{font:700 1.3rem var(--display);font-variant-numeric:tabular-nums}
+.param .pv small{font-size:.75rem;color:var(--muted);font-family:var(--body);font-weight:500}
+.param .pz{font-size:.74rem;font-weight:600;display:flex;align-items:center;gap:5px;color:var(--muted)}
+.param .pz i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.weigh.main input{font-size:1.25rem;padding:13px 10px}
 .adj{display:flex;flex-direction:column;gap:8px}
 .adj .big{font:700 1.6rem var(--display);font-variant-numeric:tabular-nums}
 .adj.down{border-left:4px solid var(--warn)}.adj.up{border-left:4px solid var(--good)}
@@ -753,49 +762,105 @@ function chartSVG(E){
   const xl=`<text x="${L}" y="${H-8}">${dl(pts[0].d)}</text><text x="${W-R}" y="${H-8}" text-anchor="end">${dl(lastE.d)}</text>`;
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução do peso"><defs><linearGradient id="kgfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".18"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>${g}${goal}<path d="${area}" fill="url(#kgfill)"/><path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}${lab}${xl}</svg>`;
 }
-let progMsg="";
+let progMsg="",progMetric="kg";
+// campos da balança (Xiaomi Mi Scale 2 / Zepp Life) com as zonas que a app usa
+const MET={
+  kg:{n:"Peso",u:"kg",dec:1,min:40,max:150,good:"down"},
+  bf:{n:"Gordura corporal",u:"%",dec:1,min:3,max:50,good:"down",zones:[[11,"Muito baixo","var(--accent)"],[17,"Baixo","var(--accent)"],[22,"Normal","var(--good)"],[27,"Elevado","var(--warn)"],[99,"Alto","#d64545"]]},
+  vf:{n:"Gordura visceral",u:"",dec:0,min:1,max:30,good:"down",zones:[[9.5,"Normal","var(--good)"],[14.5,"Elevado","var(--warn)"],[99,"Alto","#d64545"]]},
+  mm:{n:"Músculo",u:"kg",dec:2,min:20,max:100,good:"up"},
+  wa:{n:"Água",u:"%",dec:1,min:30,max:80,good:"up",zones:[[55,"Insuficiente","#d64545"],[65.1,"Normal","var(--good)"],[99,"Ótimo","var(--accent)"]]},
+  pr:{n:"Proteína",u:"%",dec:1,min:5,max:30,good:"up",zones:[[16,"Baixo","var(--warn)"],[99,"Ótimo","var(--good)"]]},
+  bm:{n:"Massa óssea",u:"kg",dec:2,min:1,max:6,good:"up"},
+  bmr:{n:"Metabolismo basal",u:"kcal",dec:0,min:800,max:4000,good:"up"},
+  imc:{n:"IMC",u:"",dec:1,min:12,max:45,good:"down",zones:[[18.5,"Baixo","var(--warn)"],[25,"Normal","var(--good)"],[30,"Elevado","var(--warn)"],[99,"Alto","#d64545"]]},
+  w:{n:"Cintura",u:"cm",dec:0,min:50,max:150,good:"down"}
+};
+const FORM_KEYS=["kg","bf","vf","mm","wa","pr","bm","bmr","imc","w"];
+const fmtM=(k,v)=>v==null||isNaN(v)?"—":Number(v).toFixed(MET[k].dec).replace(".",",");
+const zoneOf=(k,v)=>{const z=MET[k].zones;if(!z||v==null)return null;return z.find(x=>v<x[0])||z[z.length-1]};
+function avg7(E,k,i){const d0=dnum(E[i].d);const w=E.filter((e,j)=>j<=i&&d0-dnum(e.d)<7&&e[k]!=null).map(e=>e[k]);return w.length?w.reduce((a,b)=>a+b)/w.length:null}
+function chartSVG(E,k){
+  const M=MET[k];const W=600,H=230,L=44,R=46,T=16,B=28;
+  const pts=E.map((e,i)=>({d:dnum(e.d),v:e[k],a:avg7(E,k,i),date:e.d})).filter(p=>p.v!=null);if(pts.length<2)return "";
+  let x0=pts[0].d,x1=pts[pts.length-1].d;if(x1-x0<7)x1=x0+7;
+  const vals=pts.map(p=>p.v);if(k==="kg")vals.push(GOAL_KG);
+  let lo=Math.min(...vals),hi=Math.max(...vals);const pad=(hi-lo)*0.15||1;lo-=pad;hi+=pad;
+  const X=x=>L+(x-x0)/(x1-x0)*(W-L-R),Y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
+  const raw=(hi-lo)/4;const mag=10**Math.floor(Math.log10(raw));const step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=raw);
+  let g="";for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step)g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--line)"/><text x="${L-8}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${fmtM(k,v).replace(/,0+$/,"")}</text>`;
+  const goal=k==="kg"?`<line x1="${L}" x2="${W-R}" y1="${Y(GOAL_KG)}" y2="${Y(GOAL_KG)}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${W-R+6}" y="${Y(GOAL_KG)+4}" style="fill:var(--good)">meta</text>`:"";
+  const dots=pts.map(p=>`<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="2.6" fill="var(--faint)" opacity=".7"/>`).join("");
+  const ap=pts.filter(p=>p.a!=null);
+  const line=ap.map((p,i)=>`${i?"L":"M"}${X(p.d).toFixed(1)},${Y(p.a).toFixed(1)}`).join("");
+  const area=line+`L${X(ap[ap.length-1].d).toFixed(1)},${H-B}L${X(ap[0].d).toFixed(1)},${H-B}Z`;
+  const lp=ap[ap.length-1];
+  const end=`<circle cx="${X(lp.d).toFixed(1)}" cy="${Y(lp.a).toFixed(1)}" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/><text x="${(X(lp.d)-8).toFixed(1)}" y="${(Y(lp.a)-11).toFixed(1)}" text-anchor="end" style="fill:var(--fg);font-weight:600">${fmtM(k,lp.a)}</text>`;
+  const dl=d=>new Date(d+"T12:00:00").toLocaleDateString("pt-PT",{day:"numeric",month:"short"});
+  const xl=`<text x="${L}" y="${H-8}">${dl(pts[0].date)}</text><text x="${W-R}" y="${H-8}" text-anchor="end">${dl(pts[pts.length-1].date)}</text>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução: ${M.n}"><defs><linearGradient id="kgfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".18"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>${g}${goal}<path d="${area}" fill="url(#kgfill)"/>${dots}<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${end}${xl}</svg>`;
+}
+function muscleWarn(E){
+  const M=E.filter(e=>e.mm!=null);if(M.length<4)return "";
+  const last=dnum(M[M.length-1].d);const recent=M.filter(e=>last-dnum(e.d)<7),old=M.filter(e=>last-dnum(e.d)>=14&&last-dnum(e.d)<21);
+  if(!recent.length||!old.length)return "";
+  const a=recent.reduce((s,e)=>s+e.mm,0)/recent.length,b=old.reduce((s,e)=>s+e.mm,0)/old.length;
+  return b-a>0.6?`<li>O músculo desceu ${fmtM("mm",b-a)} kg em 2 semanas (média). Confirma que cumpres a proteína; se continuar, o défice está demasiado agressivo.</li>`:"";
+}
 function renderProg(){
   const el=$("prog");const E=sortedEntries();const last=E[E.length-1],first=E[0];
   const r=reviewAdj();
   const prevWeek=last?E.filter(e=>dnum(last.d)-dnum(e.d)>=6).pop():null;
-  const dd=(a,b,unit,good)=>{if(a==null||b==null)return `<span class="d">—</span>`;const v=a-b;const cls=v===0?"":((v<0)===good?"good":"bad");return `<span class="d ${cls}">${v>0?"+":""}${fmt1(v)} ${unit}</span>`};
-  const stats=last?`<div class="stats">
-      <div class="stat"><span class="label">Peso</span><span class="v">${fmt1(last.kg)}<small>kg</small></span>${dd(last.kg,prevWeek?.kg,"kg",true)}</div>
-      <div class="stat"><span class="label">Gordura</span><span class="v">${fmt1(last.bf)}<small>%</small></span>${dd(last.bf,prevWeek?.bf,"pp",true)}</div>
-      <div class="stat"><span class="label">Cintura</span><span class="v">${last.w?Math.round(last.w):"—"}<small>cm</small></span>${dd(last.w,prevWeek?.w,"cm",true)}</div>
-    </div>`:"";
+  const delta=(k)=>{const a=last?.[k],b=prevWeek?.[k];if(a==null||b==null)return `<span class="d">vs. semana passada: —</span>`;const v=a-b;const good=MET[k].good==="down"?v<0:v>0;return `<span class="d ${v===0?"":good?"good":"bad"}">${v>0?"+":""}${fmtM(k,v)} ${MET[k].u} numa semana</span>`};
+  const a7=k=>last?avg7(E,k,E.length-1):null;
+  const top=last?`<div class="stats">
+      <div class="stat"><span class="label">Peso</span><span class="v">${fmtM("kg",last.kg)}<small>kg</small></span>${delta("kg")}</div>
+      <div class="stat"><span class="label">Gordura</span><span class="v">${fmtM("bf",last.bf)}<small>%</small></span>${delta("bf")}</div>
+      <div class="stat"><span class="label">Músculo</span><span class="v">${fmtM("mm",last.mm)}<small>kg</small></span>${delta("mm")}</div>
+    </div>
+    <p class="meta" style="margin:0">Média dos últimos 7 dias: <b style="color:var(--fg)">${fmtM("kg",a7("kg"))} kg</b>${a7("bf")!=null?` · ${fmtM("bf",a7("bf"))} % gordura`:""}. É esta média que conta, não o valor de um dia.</p>`:"";
+  const params=last?`<div class="params">${["bf","vf","wa","pr","imc","bm","bmr","w"].filter(k=>last[k]!=null).map(k=>{const z=zoneOf(k,last[k]);return `<div class="param"><span class="pn">${MET[k].n}</span><span class="pv">${fmtM(k,last[k])}${MET[k].u?` <small>${MET[k].u}</small>`:""}</span>${z?`<span class="pz" style="color:${z[2]}"><i style="background:${z[2]}"></i>${z[1]}</span>`:k==="bmr"&&last.bmr<1695?`<span class="pz" style="color:var(--warn)"><i style="background:var(--warn)"></i>Abaixo do padrão</span>`:`<span class="pz">&nbsp;</span>`}</div>`}).join("")}</div>`:"";
   let goal="";
   if(last&&first){
-    const start=Math.max(first.kg,last.kg);const tot=start-GOAL_KG;const done=start-last.kg;const pct=tot>0?Math.max(0,Math.min(100,done/tot*100)):100;
+    const cur=a7("kg")??last.kg;const start=Math.max(first.kg,cur);const tot=start-GOAL_KG;const pct=tot>0?Math.max(0,Math.min(100,(start-cur)/tot*100)):100;
     const rate=r?.rate;let eta="";
-    if(rate&&rate<-0.05&&last.kg>GOAL_KG){const wk=(last.kg-GOAL_KG)/Math.abs(rate);const d=new Date();d.setDate(d.getDate()+Math.round(wk*7));eta=` · ao ritmo atual, por volta de ${d.toLocaleDateString("pt-PT",{month:"long",year:"numeric"})}`}
-    goal=`<div class="goal"><div class="row"><span>${fmt1(start)} kg</span><span>meta ${fmt1(GOAL_KG)} kg</span></div><div class="track"><i style="width:${pct}%;background:var(--good)"></i></div><div class="meta">Faltam ${fmt1(Math.max(0,last.kg-GOAL_KG))} kg${eta}</div></div>`;
+    if(rate&&rate<-0.05&&cur>GOAL_KG){const wk=(cur-GOAL_KG)/Math.abs(rate);const d=new Date();d.setDate(d.getDate()+Math.round(wk*7));eta=` · ao ritmo atual, por volta de ${d.toLocaleDateString("pt-PT",{month:"long",year:"numeric"})}`}
+    goal=`<div class="goal"><div class="row"><span>${fmtM("kg",start)} kg</span><span>meta ${fmtM("kg",GOAL_KG)} kg</span></div><div class="track"><i style="width:${pct}%;background:var(--good)"></i></div><div class="meta">Faltam ${fmtM("kg",Math.max(0,cur-GOAL_KG))} kg${eta}</div></div>`;
   }
-  const rateTxt=r?`${r.rate<=0?"−":"+"}${fmt1(Math.abs(r.rate))} kg/semana`:null;
+  const rateTxt=r?`${r.rate<=0?"−":"+"}${fmtM("kg",Math.abs(r.rate))} kg/semana`:null;
+  const warn=muscleWarn(E);
   const adjCard=`<div class="card adj ${prog.adj<0?"down":prog.adj>0?"up":""}">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="label">Ajuste automático de calorias</span>${prog.adj?`<span class="adjtag">no plano alimentar</span>`:""}</div>
       <div class="big">${prog.adj===0?"Sem ajuste":(prog.adj>0?"+":"−")+Math.abs(prog.adj)+" kcal/dia"}</div>
-      <p class="meta" style="margin:0">${!rateTxt?"Precisa de pelo menos 3 pesagens em 2 semanas para calcular o ritmo. Pesa-te 2–3 vezes por semana, de manhã, em jejum e depois da casa de banho.":r.changed?r.why:`Ritmo atual: ${rateTxt}. ${r.rate<=-0.2&&r.rate>=-1?"Está no intervalo certo (0,2 a 1 kg por semana), mantém.":r.rate>-0.2?(prog.adj<=ADJ_MIN?"Já está no ajuste máximo: o próximo passo é passos e cumprir o plano, não comer menos.":"Revejo outra vez na próxima semana."):"Revejo outra vez na próxima semana."}`}</p>
+      <p class="meta" style="margin:0">${!rateTxt?"Precisa de cerca de 2 semanas de pesagens para calcular o ritmo.":r.changed?r.why:`Ritmo atual: ${rateTxt}. ${r.rate<=-0.2&&r.rate>=-1?"Está no intervalo certo (0,2 a 1 kg por semana), mantém.":r.rate>-0.2&&prog.adj<=ADJ_MIN?"Já está no ajuste máximo: o próximo passo é passos e cumprir o plano, não comer menos.":"Revejo outra vez na próxima semana."}`}</p>
+      ${warn?`<ul class="notes">${warn}</ul>`:""}
       <p class="meta" style="margin:0">O ajuste mexe só nas porções de arroz, massa, batata, pão e aveia. Revisão no máximo uma vez por semana, entre ${ADJ_MIN} e +${ADJ_MAX} kcal.</p>
       ${prog.adj?`<button class="link" type="button" id="adj-reset" style="align-self:flex-start">Repor plano original</button>`:""}
     </div>`;
-  const tKey=TODAY_KEY;const todayE=prog.entries.find(e=>e.d===tKey);
+  const todayE=prog.entries.find(e=>e.d===TODAY_KEY);
+  const inp=(k,ph)=>`<label>${MET[k].n}${MET[k].u?` (${MET[k].u})`:""}<input id="w-${k}" inputmode="decimal" placeholder="${ph}" value="${todayE?.[k]!=null?fmtM(k,todayE[k]):""}"></label>`;
+  const ph=k=>last?.[k]!=null?fmtM(k,last[k]):({kg:"76,0",bf:"21,4",vf:"9",mm:"54,94",wa:"53,8",pr:"20,6",bm:"2,94",bmr:"1671",imc:"24,6",w:"opcional"})[k];
   const form=`<div class="card" style="display:flex;flex-direction:column;gap:14px">
-      <div><span class="label">${todayE?"Pesagem de hoje · podes corrigir":"Nova pesagem"}</span><h3 style="font:700 1.4rem var(--display);text-transform:uppercase;margin-top:2px">Balança</h3></div>
-      <div class="weigh">
-        <label>Peso (kg)<input id="w-kg" inputmode="decimal" placeholder="${last?fmt1(last.kg):"76,0"}" value="${todayE?fmt1(todayE.kg):""}"></label>
-        <label>Gordura (%)<input id="w-bf" inputmode="decimal" placeholder="${last?.bf?fmt1(last.bf):"22,0"}" value="${todayE?.bf?fmt1(todayE.bf):""}"></label>
-        <label>Cintura (cm)<input id="w-w" inputmode="decimal" placeholder="opcional" value="${todayE?.w?Math.round(todayE.w):""}"></label>
-      </div>
-      <button class="btn" id="w-save" type="button">Guardar pesagem</button>
+      <div><span class="label">${todayE?"Pesagem de hoje · já registada, podes corrigir":"Pesagem diária · "+new Date().toLocaleDateString("pt-PT",{weekday:"long",day:"numeric",month:"short"})}</span><h3 style="font:700 1.4rem var(--display);text-transform:uppercase;margin-top:2px">Balança</h3>
+        <p class="meta" style="margin:4px 0 0">Copia os valores da Zepp Life. De manhã, em jejum, depois da casa de banho e antes do banho.</p></div>
+      <div class="weigh main">${inp("kg",ph("kg"))}${inp("bf",ph("bf"))}${inp("mm",ph("mm"))}</div>
+      <div class="weigh">${["vf","wa","pr","imc","bm","bmr"].map(k=>inp(k,ph(k))).join("")}</div>
+      <div class="weigh">${inp("w",ph("w"))}</div>
+      <button class="btn" id="w-save" type="button">${todayE?"Atualizar pesagem":"Guardar pesagem"}</button>
       <p class="status" id="w-status">${progMsg}</p>
     </div>`;
   progMsg="";
-  const chart=E.filter(e=>e.kg).length>=2?`<div class="card" style="display:flex;flex-direction:column;gap:10px"><div class="weekhead" style="margin:0"><span class="label">Evolução do peso</span>${rateTxt?`<span class="meta">${rateTxt}</span>`:""}</div><div class="chartwrap">${chartSVG(E)}</div><div class="legend"><span><i></i>peso</span><span><i class="g"></i>meta ${fmt1(GOAL_KG)} kg</span></div></div>`
-    :`<div class="card empty"><h3>${E.length?"Falta mais uma pesagem":"Ainda sem pesagens"}</h3><p>${E.length?"Com 2 pesagens já aparece o gráfico.":"Mete a primeira pesagem acima. Usa sempre a mesma balança e as mesmas condições."}</p></div>`;
-  const logs=E.length?`<div class="card"><span class="label">Registo</span><ul class="logs" style="margin-top:6px">${E.slice().reverse().slice(0,30).map(e=>`<li><span>${new Date(e.d+"T12:00:00").toLocaleDateString("pt-PT",{day:"numeric",month:"short"})}</span><span class="vals">${fmt1(e.kg)} kg${e.bf?` · ${fmt1(e.bf)} %`:""}${e.w?` · ${Math.round(e.w)} cm`:""}</span><button class="del" type="button" data-wdel="${e.d}">Apagar</button></li>`).join("")}</ul></div>`:"";
+  const avail=["kg","bf","mm","vf","wa"].filter(k=>E.filter(e=>e[k]!=null).length>=2);
+  if(!avail.includes(progMetric))progMetric=avail[0]||"kg";
+  const chart=avail.length?`<div class="card" style="display:flex;flex-direction:column;gap:12px">
+      <div class="weekhead" style="margin:0"><span class="label">Evolução</span>${progMetric==="kg"&&rateTxt?`<span class="meta">${rateTxt}</span>`:""}</div>
+      <div class="chips">${avail.map(k=>`<button class="chip" type="button" data-pm="${k}" aria-pressed="${k===progMetric}">${MET[k].n.replace(" corporal","")}</button>`).join("")}</div>
+      <div class="chartwrap">${chartSVG(E,progMetric)}</div>
+      <div class="legend"><span><i></i>média de 7 dias</span><span><i class="f" style="width:6px;height:6px;border-radius:50%;background:var(--faint)"></i>pesagem do dia</span>${progMetric==="kg"?`<span><i class="g"></i>meta ${fmtM("kg",GOAL_KG)} kg</span>`:""}</div></div>`
+    :`<div class="card empty"><h3>${E.length?"Falta mais uma pesagem":"Ainda sem pesagens"}</h3><p>${E.length?"Amanhã, com a segunda pesagem, já aparece o gráfico.":"Mete a primeira pesagem acima."}</p></div>`;
+  const logs=E.length?`<div class="card"><span class="label">Registo</span><ul class="logs" style="margin-top:6px">${E.slice().reverse().slice(0,30).map(e=>`<li><span>${new Date(e.d+"T12:00:00").toLocaleDateString("pt-PT",{day:"numeric",month:"short"})}</span><span class="vals">${fmtM("kg",e.kg)} kg${e.bf!=null?` · ${fmtM("bf",e.bf)} %`:""}${e.mm!=null?` · músc. ${fmtM("mm",e.mm)}`:""}${e.vf!=null?` · visc. ${e.vf}`:""}</span><button class="del" type="button" data-wdel="${e.d}">Apagar</button></li>`).join("")}</ul></div>`:"";
   const hist=prog.log.length?`<div class="card"><span class="label">Ajustes feitos</span><ul class="logs" style="margin-top:6px">${prog.log.map(l=>`<li><span>Sem. ${l.w.slice(8)}/${l.w.slice(5,7)}</span><span class="vals">${l.why}</span><span class="adjtag">${l.adj>0?"+":""}${l.adj}</span></li>`).join("")}</ul></div>`:"";
-  el.innerHTML=`<div class="card" style="display:flex;flex-direction:column;gap:16px"><div><span class="label">Composição corporal</span><h2 style="margin-top:4px">Progresso</h2></div>${stats||`<p class="meta" style="margin:0">Regista o peso 2–3 vezes por semana para veres a tendência e para o plano alimentar se ajustar sozinho.</p>`}${goal}</div>${form}${chart}${adjCard}${logs}${hist}`;
+  el.innerHTML=`<div class="card" style="display:flex;flex-direction:column;gap:16px"><div><span class="label">${last?"Última pesagem · "+new Date(last.d+"T12:00:00").toLocaleDateString("pt-PT",{day:"numeric",month:"long"}):"Composição corporal"}</span><h2 style="margin-top:4px">Progresso</h2></div>${top||`<p class="meta" style="margin:0">Pesa-te todos os dias. A app usa a média de 7 dias para ver a tendência e ajustar o plano alimentar.</p>`}${params}${goal}</div>${form}${chart}${adjCard}${logs}${hist}`;
 }
 const pnum=v=>{const n=parseFloat(String(v||"").replace(",","."));return isNaN(n)?null:n};
 
@@ -856,11 +921,11 @@ document.addEventListener("click",async ev=>{
   if(b.dataset.rpe){const dr=draft[b.dataset.rpe];dr.rpe=dr.rpe===b.dataset.v?"":b.dataset.v;b.parentElement.querySelectorAll("[data-rpe]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.v===dr.rpe)));return}
   if(b.id&&b.id.startsWith("tab-")){const v=b.id.slice(4);for(const t of ["hoje","nutri","prog","hist"]){$("tab-"+t).setAttribute("aria-selected",String(t===v));if(t==="hoje")$("view-hoje").style.display=v==="hoje"?"flex":"none";else $("view-"+t).hidden=t!==v}if(v==="hoje")renderAll();if(v==="nutri")renderNutri();if(v==="prog")renderProg();return}
   if(b.id==="w-save"){
-    const kg=pnum($("w-kg").value),bf=pnum($("w-bf").value),w=pnum($("w-w").value);
-    if(kg===null||kg<40||kg>150){$("w-status").textContent="Mete o peso em kg, por exemplo 75,4.";return}
-    if(bf!==null&&(bf<3||bf>50)){$("w-status").textContent="A gordura deve estar entre 3 e 50 %.";return}
-    const e={d:TODAY_KEY,kg:Math.round(kg*10)/10};if(bf!==null)e.bf=Math.round(bf*10)/10;if(w!==null)e.w=Math.round(w);
+    const e={d:TODAY_KEY};
+    for(const k of FORM_KEYS){const v=pnum($("w-"+k).value);if(v===null)continue;const M=MET[k];if(v<M.min||v>M.max){$("w-status").textContent=`${M.n}: valor fora do normal (${M.min}–${M.max}${M.u?" "+M.u:""}). Confirma.`;return}e[k]=M.dec===0?Math.round(v):Math.round(v*10**M.dec)/10**M.dec}
+    if(e.kg==null){$("w-status").textContent="Mete pelo menos o peso, por exemplo 75,4.";return}
     prog.entries=prog.entries.filter(x=>x.d!==TODAY_KEY);prog.entries.push(e);saveProg();progMsg="Pesagem guardada.";renderProg();return}
+  if(b.dataset.pm){progMetric=b.dataset.pm;renderProg();return}
   if(b.dataset.wdel){if(b.dataset.confirm){prog.entries=prog.entries.filter(x=>x.d!==b.dataset.wdel);saveProg();renderProg()}else{b.dataset.confirm="1";b.textContent="Confirmar"}return}
   if(b.id==="adj-reset"){prog.adj=0;prog.log.unshift({w:WEEK_KEY,delta:0,adj:0,why:"Reposto à mão para o plano original."});saveProg();renderProg();return}
   if(b.dataset.nday){nutriDay=Number(b.dataset.nday);renderNutri();return}
